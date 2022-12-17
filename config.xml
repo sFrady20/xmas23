@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.fradiation.xmas22" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Christmas Town</name>
+    <description>Idk just messin around</description>
+    <author email="sfrady20@gmail.com" href="https://stevenfrady.com">
+        Steven Frady
+    </author>
+    
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+
+    <!-- <content src="http://192.168.1.241:5173/" /> -->
+    <content src="index.html" />
+
+    <icon src="public/app-icon.png" />
+</widget>

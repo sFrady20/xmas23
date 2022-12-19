@@ -1290,6 +1290,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/seedrandom@npm:^3.0.2":
+  version: 3.0.2
+  resolution: "@types/seedrandom@npm:3.0.2"
+  checksum: 02e585601cb9764cb0eb3f92b384512f8e171422acea3d5a801a41a8a06d475b60ae520eba469bcedf0ed8ad650415919cf30a9cd6bc57090613e61bedc071ed
+  languageName: node
+  linkType: hard
+
 "@types/shortid@npm:^0.0.29":
   version: 0.0.29
   resolution: "@types/shortid@npm:0.0.29"
@@ -1785,6 +1792,7 @@ __metadata:
     "@types/lodash": ^4.14.188
     "@types/react": ^18.0.25
     "@types/react-dom": ^18.0.8
+    "@types/seedrandom": ^3.0.2
     "@types/shortid": ^0.0.29
     "@types/three": ^0.146.0
     axios: ^1.2.1

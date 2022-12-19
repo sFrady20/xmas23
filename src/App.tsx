@@ -68,9 +68,9 @@ const theme = createTheme({
 });
 
 type PushGameStateHelpers = {
-  occur: typeof occur;
   matchesTrigger: typeof matchesTrigger;
-  affect: typeof affect;
+  occur: (state: Draft<GameState>, action?: string) => void;
+  affect: (state: Draft<GameState>, effect?: Effect) => void;
 };
 type GameContextType = {
   story: Story;
@@ -93,8 +93,8 @@ function useGameSelector<T>(
     gameContext: GameContextType,
     helpers: {
       getScene: (scenePath?: [string, string?]) => {
-        scene?: Story.Scene;
-        action?: Story.Action;
+        scene?: Scene;
+        action?: Action;
       };
     }
   ) => T
@@ -280,8 +280,8 @@ const Loader = () => {
   );
 };
 
-const Setting = (props: { location: [string, string?] }) => {
-  const { location } = props;
+const Setting = (props: { setting: [string, string?] }) => {
+  const { setting } = props;
 
   return (
     <Suspense fallback={<Loader />}>
@@ -291,7 +291,7 @@ const Setting = (props: { location: [string, string?] }) => {
           position: "absolute",
           height: "calc(var(--lsvh, 1vh) * 100)",
           width: "100vw",
-          backgroundImage: `url(/location-${location.join("-")}.png)`,
+          backgroundImage: `url(/setting-${setting.join("-")}.png)`,
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -300,17 +300,17 @@ const Setting = (props: { location: [string, string?] }) => {
   );
 };
 
-const NavigationRoomItem = (props: { location: [string, string?] }) => {
-  const { location } = props;
+const NavigationRoomItem = (props: { setting: [string, string?] }) => {
+  const { setting } = props;
 
-  const [currentLocation, pushGameState] = useContextSelector(
+  const [currentSetting, pushGameState] = useContextSelector(
     GameContext,
-    (x) => [x.state.location, x.pushGameState] as const
+    (x) => [x.state.setting, x.pushGameState] as const
   );
 
   const matches = useMemo(
-    () => currentLocation.join("-") === location.join("-"),
-    [currentLocation, location]
+    () => currentSetting.join("-") === setting.join("-"),
+    [currentSetting, setting]
   );
 
   const anim = useSpring({
@@ -326,15 +326,15 @@ const NavigationRoomItem = (props: { location: [string, string?] }) => {
       style={anim}
       onClick={() =>
         pushGameState((x, { occur }) => {
-          if (x.location.join("-") === location.join("-")) return;
-          x.location = location;
+          if (x.setting.join("-") === setting.join("-")) return;
+          x.setting = setting;
           occur(x);
         })
       }
     >
       <CardMedia
         sx={{ width: 40, height: 40 }}
-        image={`/location-${location.join("-")}.png`}
+        image={`/setting-${setting.join("-")}.png`}
       />
     </AnimatedCard>
   );
@@ -344,8 +344,8 @@ const NavigationTravel = () => {
   const el = useRef<HTMLDivElement>(null);
   const [isOpen, setOpen] = useState(false);
 
-  const [overlay, location] = useGameSelector(
-    (x) => [x.overlay, x.state.location] as const
+  const [overlay, setting] = useGameSelector(
+    (x) => [x.overlay, x.state.setting] as const
   );
 
   return (
@@ -367,7 +367,7 @@ const NavigationTravel = () => {
       >
         <MenuItem
           onClick={() => {
-            if (location[0] === "workshop") return;
+            if (setting[0] === "workshop") return;
             setOpen(false);
             overlay(TravelOverlay, { to: ["workshop", "station"] });
           }}
@@ -376,7 +376,7 @@ const NavigationTravel = () => {
         </MenuItem>
         <MenuItem
           onClick={() => {
-            if (location[0] === "home") return;
+            if (setting[0] === "home") return;
             setOpen(false);
             overlay(TravelOverlay, { to: ["home", "den"] });
           }}
@@ -389,14 +389,14 @@ const NavigationTravel = () => {
 };
 
 const Navigation = (props: {
-  location: [string, string?];
+  setting: [string, string?];
   hidden?: boolean;
 }) => {
-  const { location, hidden } = props;
+  const { setting, hidden } = props;
 
   const rooms = useContextSelector(
     GameContext,
-    (x) => x.story.locations[location[0]]?.rooms
+    (x) => x.story.settings[setting[0]]?.rooms
   );
 
   const anim = useSpring({ to: { bottom: hidden ? -80 : 0 } });
@@ -433,7 +433,7 @@ const Navigation = (props: {
         }}
       >
         {map(rooms, (x, id) => (
-          <NavigationRoomItem key={id} location={[location[0], id]} />
+          <NavigationRoomItem key={id} setting={[setting[0], id]} />
         ))}
       </Stack>
       <NavigationTravel />
@@ -453,8 +453,8 @@ const matchesTrigger: (
       return some(trigger.children, (x) => matchesTrigger(state, x));
     case "action":
       return trigger.action === action;
-    case "location":
-      return trigger.location.join("-") === state.location.join("-");
+    case "setting":
+      return trigger.setting.join("-") === state.setting.join("-");
     case "tag":
       const tagVal = state.tags[trigger.tag] || 0;
       return (
@@ -463,46 +463,6 @@ const matchesTrigger: (
       );
   }
   return false;
-};
-
-const affect: (state: Draft<GameState>, effect?: Effect) => void = (
-  state,
-  effect
-) => {
-  if (!effect) return;
-  switch (effect.type) {
-    case "and":
-      mapValues(effect.children, (x) => affect(state, x as any));
-      return;
-    case "location":
-      if (state.location.join("-") !== effect.location.join("-"))
-        state.location = effect.location;
-      return;
-    case "time":
-      state.time[0] += effect.days;
-      state.time[1] += effect.times;
-      return;
-    case "scene":
-      state.scene = effect.scene;
-      return;
-    case "tag":
-      state.tags[effect.tag] = (state.tags[effect.tag] || 0) + effect.amount;
-      return;
-  }
-};
-
-const occur = (state: Draft<GameState>, action?: string) => {
-  if (state.scene) return;
-
-  const opportunityId = findKey(state.opportunities, (x, id) =>
-    matchesTrigger(state, x.trigger, action)
-  );
-  if (opportunityId) {
-    const tagId = `triggered-${opportunityId}`;
-    state.tags[tagId] = (state.tags[tagId] || 0) + 1;
-    console.log("TRIGGERED", opportunityId);
-    affect(state, state.opportunities[opportunityId].effect);
-  }
 };
 
 const SceneRenderer = (props: { scenePath?: [string, string?] }) => {
@@ -522,7 +482,7 @@ const SceneRenderer = (props: { scenePath?: [string, string?] }) => {
   );
 };
 
-type Overlay = FC<{ id: string; destroy: () => void; params: any }>;
+type Overlay = FC<{ destroy: () => void; params: any }>;
 
 const TravelOverlay: Overlay = ({ destroy, params }) => {
   const [pushGameState] = useGameSelector((x) => [x.pushGameState] as const);
@@ -530,14 +490,14 @@ const TravelOverlay: Overlay = ({ destroy, params }) => {
     (async () => {
       pushGameState(
         (x, {}) => {
-          x.location = ["travel"];
+          x.setting = ["travel"];
         },
         { replace: true }
       );
       await new Promise((resolve) => setTimeout(resolve, 3000));
       pushGameState((x, {}) => {
         x.time[1] = x.time[1] + 1;
-        x.location = params.to;
+        x.setting = params.to;
       });
       destroy();
     })();
@@ -553,13 +513,13 @@ const SleepOverlay: Overlay = ({ destroy }) => {
         (x, {}) => {
           x.time[0] += 1;
           x.time[1] = 0;
-          x.location = ["dream"];
+          x.setting = ["dream"];
         },
         { replace: true }
       );
       await new Promise((resolve) => setTimeout(resolve, 3000));
       pushGameState((x, {}) => {
-        x.location = ["home", "bedroom"];
+        x.setting = ["home", "bedroom"];
       });
       destroy();
     })();
@@ -571,7 +531,7 @@ const Game = () => {
   const [state, updateState] = useImmer<GameState>({
     seed: shortid(),
     time: [0, 0],
-    location: story.startingLocation,
+    setting: story.startingSetting,
     scene: undefined,
     tags: {},
     opportunities: {
@@ -579,18 +539,18 @@ const Game = () => {
         trigger: {
           type: "and",
           children: [
-            { type: "location", location: ["home", "kitchen"] },
+            { type: "setting", setting: ["home", "kitchen"] },
             { type: "tag", tag: "triggered-welcome", max: 1 },
           ],
         },
         effect: { type: "scene", scene: ["welcome"] },
       },
       peepoo: {
-        trigger: { type: "location", location: ["home", "bathroom"] },
+        trigger: { type: "setting", setting: ["home", "bathroom"] },
         effect: { type: "scene", scene: ["peepoo"] },
       },
       backToWork: {
-        trigger: { type: "location", location: ["workshop", "executive"] },
+        trigger: { type: "setting", setting: ["workshop", "executive"] },
         effect: { type: "scene", scene: ["backToWork"] },
       },
     },
@@ -617,14 +577,61 @@ const Game = () => {
     [setOverlays]
   );
 
+  const affect = useMemo<PushGameStateHelpers["affect"]>(
+    () => (state, effect) => {
+      if (!effect) return;
+      switch (effect.type) {
+        case "and":
+          mapValues(effect.children, (x) => affect(state, x as any));
+          return;
+        case "setting":
+          if (state.setting.join("-") !== effect.setting.join("-"))
+            state.setting = effect.setting;
+          return;
+        case "travel":
+          overlay(TravelOverlay, { to: effect.to });
+          return;
+        case "time":
+          state.time[0] += effect.days;
+          state.time[1] += effect.times;
+          return;
+        case "scene":
+          state.scene = effect.scene;
+          return;
+        case "tag":
+          state.tags[effect.tag] =
+            (state.tags[effect.tag] || 0) + effect.amount;
+          return;
+      }
+    },
+    [state, overlay]
+  );
+
+  const occur = useMemo<PushGameStateHelpers["occur"]>(
+    () => (state, action) => {
+      if (state.scene) return;
+
+      const opportunityId = findKey(state.opportunities, (x, id) =>
+        matchesTrigger(state, x.trigger, action)
+      );
+      if (opportunityId) {
+        const tagId = `triggered-${opportunityId}`;
+        state.tags[tagId] = (state.tags[tagId] || 0) + 1;
+        console.log("TRIGGERED", opportunityId);
+        affect(state, state.opportunities[opportunityId].effect);
+      }
+    },
+    [state, affect]
+  );
+
   const pushGameState = useCallback<GameContextType["pushGameState"]>(
     (next, options) => {
       updateState((x) => {
         //call downstream state changes
         next(x, {
-          occur,
           matchesTrigger,
-          affect: affect,
+          occur,
+          affect,
         });
 
         //make sure unassigned scenes don't break the game
@@ -673,8 +680,8 @@ const Game = () => {
         overlay,
       }}
     >
-      <Setting location={state.location} />
-      <Navigation location={state.location} hidden={!!state.scene} />
+      <Setting setting={state.setting} />
+      <Navigation setting={state.setting} hidden={!!state.scene} />
       <SceneRenderer scenePath={state.scene} />
       <Stack
         direction={"row"}

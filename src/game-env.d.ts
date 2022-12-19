@@ -7,7 +7,7 @@ declare type Game = {
 declare type GameState = {
   seed: string;
   time: [number, number];
-  location: [string, string?];
+  setting: [string, string?];
   scene?: [string, string?];
   tags: { [tag: string]: number };
   opportunities: { [id: string]: Opportunity };
@@ -20,7 +20,7 @@ declare type Opportunity = {
 
 declare type Trigger =
   | { type: "action"; action: string }
-  | { type: "location"; location: [string, string?] }
+  | { type: "setting"; setting: [string, string?] }
   | { type: "tag"; tag: string; min?: number; max?: number }
   | { type: "time"; days?: number[]; times?: number[]; weekdays?: number[] }
   | { type: "or"; children: Trigger[] }
@@ -28,57 +28,57 @@ declare type Trigger =
 
 declare type Effect =
   | { type: "scene"; scene: [string, string?] }
-  | { type: "location"; location: [string, string?] }
+  | { type: "setting"; setting: [string, string?] }
+  | { type: "travel"; to: [string, string?] }
+  | { type: "sleep" }
   | { type: "time"; days: number; times: number }
   | { type: "tag"; tag: string; amount: number }
   | { type: "and"; children: Effect[] };
 
+declare type Character = {
+  name: string;
+  color: string;
+  description: string;
+};
+
+declare type Room = { name: string };
+
+declare type Setting = {
+  name: string;
+  description: string;
+  rooms?: { [id: string]: Room };
+};
+
 declare type Story = {
-  startingLocation: [string, string?];
+  startingSetting: [string, string?];
   times: string[];
-  characters: { [id: string]: Story.Character };
-  locations: { [id: string]: Story.Location };
+  characters: { [id: string]: Character };
+  settings: { [id: string]: Setting };
   scenes: {
-    [key: string]: Story.Scene;
+    [key: string]: Scene;
   };
 };
 
-namespace Story {
-  declare type Character = {
-    name: string;
-    color: string;
-    description: string;
-  };
+declare type Choice = {
+  message: string[];
+  effect?: Effect;
+};
 
-  declare type Room = { name: string };
+declare type Action = (
+  | {
+      type: "dialog";
+      character: string;
+      message: string[];
+      choices?: Choice[];
+    }
+  | {
+      type: "other";
+    }
+) & {
+  effect?: Effect;
+};
 
-  declare type Location = {
-    name: string;
-    description: string;
-    rooms?: { [id: string]: Story.Room };
-  };
-
-  declare type Choice = {
-    message: string[];
-    effect?: Effect;
-  };
-
-  declare type Action = (
-    | {
-        type: "dialog";
-        character: string;
-        message: string[];
-        choices?: Choice[];
-      }
-    | {
-        type: "other";
-      }
-  ) & {
-    effect?: Effect;
-  };
-
-  declare type Scene = {
-    characters: string[];
-    actions: { [id: string]: Action };
-  };
-}
+declare type Scene = {
+  characters: string[];
+  actions: { [id: string]: Action };
+};

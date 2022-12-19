@@ -62,7 +62,7 @@ const defaultStory: Story = {
             "I'm not paying you to stand around, get moving!",
             "You think this is a holiday? Get back to work!",
             "Don't you have a list of presents to make? Back to work!",
-            "Don't you want to make it to the naughty list? To your station, now!",
+            "Do you want to make it to the naughty list? To your station, now!",
           ],
           effect: { type: "location", location: ["workshop", "station"] },
         },
@@ -124,6 +124,7 @@ const defaultStory: Story = {
       name: "Home",
       description: "",
       rooms: {
+        //yard: { name: "Front Yard" },
         den: { name: "Living room" },
         kitchen: { name: "kitchen" },
         attic: { name: "Attic" },

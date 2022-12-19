@@ -5,14 +5,15 @@ declare type Game = {
 };
 
 declare type GameState = {
+  seed: string;
   time: [number, number];
   location: [string, string?];
   scene?: [string, string?];
   tags: { [tag: string]: number };
-  occurrences: { [id: string]: Occurrences };
+  opportunities: { [id: string]: Opportunity };
 };
 
-declare type Occurrence = {
+declare type Opportunity = {
   trigger: Trigger;
   effect: Effect;
 };

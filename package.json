@@ -23,6 +23,7 @@
     "@types/lodash": "^4.14.188",
     "@types/react": "^18.0.25",
     "@types/react-dom": "^18.0.8",
+    "@types/shortid": "^0.0.29",
     "@types/three": "^0.146.0",
     "cordova-android": "^10.1.2",
     "cordova-browser": "^6.0.0",
@@ -55,6 +56,8 @@
     "immer": "^9.0.16",
     "large-small-dynamic-viewport-units-polyfill": "^0.1.0",
     "openai": "^3.1.0",
+    "seedrandom": "^3.0.5",
+    "shortid": "^2.2.16",
     "use-context-selector": "^1.4.1",
     "use-immer": "^0.8.1"
   }

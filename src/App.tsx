@@ -17,6 +17,7 @@ import {
   CircularProgress,
   createTheme,
   CssBaseline,
+  IconButton,
   Menu,
   MenuItem,
   Stack,
@@ -28,6 +29,8 @@ import { chain, every, findKey, map, mapValues, merge, some } from "lodash";
 import story from "./data";
 import { animated, easings, useSpring, useTrail } from "@react-spring/web";
 import { Draft } from "immer";
+import shortid from "shortid";
+import seedrandom from "seedrandom";
 
 const AnimatedBox = animated(Box);
 const AnimatedCard = animated(Card);
@@ -67,21 +70,22 @@ const theme = createTheme({
 type PushGameStateHelpers = {
   occur: typeof occur;
   matchesTrigger: typeof matchesTrigger;
-  performResult: typeof performResult;
+  affect: typeof affect;
 };
 type GameContextType = {
   story: Story;
   state: GameState;
   pushGameState: (
-    next: (state: Draft<GameState>, helpers: PushGameStateHelpers) => void
+    next: (state: Draft<GameState>, helpers: PushGameStateHelpers) => void,
+    options?: { replace?: boolean }
   ) => void;
-  animate: (animation: () => Promise<void>) => void;
+  overlay: (overlay: Overlay, params?: any) => void;
 };
 const GameContext = createContext<GameContextType>({
   story: {} as any,
   state: {} as any,
   pushGameState: () => {},
-  animate: () => {},
+  overlay: () => {},
 });
 
 function useGameSelector<T>(
@@ -178,16 +182,18 @@ const Text = (props: { children: string }) => {
 const SpeechBubble = (props: { scenePath?: [string, string?] }) => {
   const { scenePath } = props;
 
-  const [scene, action, speaker, pushGameState] = useGameSelector(
+  const [scene, action, speaker, pushGameState, seed] = useGameSelector(
     (x, { getScene }) => {
       const { scene, action } = getScene(scenePath);
       const speaker =
         action?.type === "dialog"
           ? x.story.characters[action.character]
           : undefined;
-      return [scene, action, speaker, x.pushGameState] as const;
+      return [scene, action, speaker, x.pushGameState, x.state.seed] as const;
     }
   );
+
+  const random = useMemo(() => seedrandom(seed), [seed]);
 
   const anim = useSpring({
     from: { opacity: 0 },
@@ -197,9 +203,9 @@ const SpeechBubble = (props: { scenePath?: [string, string?] }) => {
   const message = useMemo(
     () =>
       action?.type === "dialog"
-        ? chain(action.message).orderBy(Math.random).first().value()
+        ? chain(action.message).orderBy(random).first().value()
         : "",
-    [scenePath?.join("-"), action]
+    [scenePath?.join("-"), action, random]
   );
 
   return (
@@ -223,9 +229,9 @@ const SpeechBubble = (props: { scenePath?: [string, string?] }) => {
         action?.type === "dialog" && action?.choices
           ? undefined
           : () => {
-              pushGameState((x, { performResult }) => {
+              pushGameState((x, { affect }) => {
                 x.scene = undefined;
-                performResult(x, action?.effect);
+                affect(x, action?.effect);
               });
             }
       }
@@ -248,10 +254,10 @@ const SpeechBubble = (props: { scenePath?: [string, string?] }) => {
                   key={i}
                   variant="outlined"
                   onClick={() => {
-                    pushGameState((y, { performResult }) => {
+                    pushGameState((y, { affect }) => {
                       y.scene = undefined;
-                      performResult(y, action.effect);
-                      performResult(y, x.effect);
+                      affect(y, action.effect);
+                      affect(y, x.effect);
                     });
                   }}
                 >
@@ -316,7 +322,7 @@ const NavigationRoomItem = (props: { location: [string, string?] }) => {
 
   return (
     <AnimatedCard
-      sx={{ borderRadius: "100%" }}
+      sx={{ borderRadius: "100%", flexShrink: 0 }}
       style={anim}
       onClick={() =>
         pushGameState((x, { occur }) => {
@@ -338,8 +344,8 @@ const NavigationTravel = () => {
   const el = useRef<HTMLDivElement>(null);
   const [isOpen, setOpen] = useState(false);
 
-  const [pushGameState, animate, location] = useGameSelector(
-    (x) => [x.pushGameState, x.animate, x.state.location] as const
+  const [overlay, location] = useGameSelector(
+    (x) => [x.overlay, x.state.location] as const
   );
 
   return (
@@ -363,16 +369,7 @@ const NavigationTravel = () => {
           onClick={() => {
             if (location[0] === "workshop") return;
             setOpen(false);
-            animate(async () => {
-              pushGameState((x, {}) => {
-                x.location = ["travel"];
-              });
-              await new Promise((resolve) => setTimeout(resolve, 3000));
-              pushGameState((x, {}) => {
-                x.time[1] = x.time[1] + 1;
-                x.location = ["workshop", "station"];
-              });
-            });
+            overlay(TravelOverlay, { to: ["workshop", "station"] });
           }}
         >
           Go to work
@@ -381,16 +378,7 @@ const NavigationTravel = () => {
           onClick={() => {
             if (location[0] === "home") return;
             setOpen(false);
-            animate(async () => {
-              pushGameState((x, {}) => {
-                x.location = ["travel"];
-              });
-              await new Promise((resolve) => setTimeout(resolve, 3000));
-              pushGameState((x, {}) => {
-                x.time[1] = x.time[1] + 1;
-                x.location = ["home", "den"];
-              });
-            });
+            overlay(TravelOverlay, { to: ["home", "den"] });
           }}
         >
           Go home
@@ -433,10 +421,16 @@ const Navigation = (props: {
     >
       <Stack
         direction="row"
-        spacing={2}
+        spacing={1}
         alignItems={"center"}
-        justifyContent={"center"}
-        sx={{ flex: 1 }}
+        justifyContent={"flex-start"}
+        sx={{
+          flex: 1,
+          height: "80px",
+          overflowX: "auto",
+          overflowY: "hidden",
+          paddingX: 1,
+        }}
       >
         {map(rooms, (x, id) => (
           <NavigationRoomItem key={id} location={[location[0], id]} />
@@ -471,14 +465,14 @@ const matchesTrigger: (
   return false;
 };
 
-const performResult: (state: Draft<GameState>, effect?: Effect) => void = (
+const affect: (state: Draft<GameState>, effect?: Effect) => void = (
   state,
   effect
 ) => {
   if (!effect) return;
   switch (effect.type) {
     case "and":
-      mapValues(effect.children, (x) => performResult(state, x as any));
+      mapValues(effect.children, (x) => affect(state, x as any));
       return;
     case "location":
       if (state.location.join("-") !== effect.location.join("-"))
@@ -500,14 +494,14 @@ const performResult: (state: Draft<GameState>, effect?: Effect) => void = (
 const occur = (state: Draft<GameState>, action?: string) => {
   if (state.scene) return;
 
-  const occurrenceId = findKey(state.occurrences, (x, id) =>
+  const opportunityId = findKey(state.opportunities, (x, id) =>
     matchesTrigger(state, x.trigger, action)
   );
-  if (occurrenceId) {
-    const tagId = `triggered-${occurrenceId}`;
+  if (opportunityId) {
+    const tagId = `triggered-${opportunityId}`;
     state.tags[tagId] = (state.tags[tagId] || 0) + 1;
-    console.log("TRIGGERED", occurrenceId);
-    performResult(state, state.occurrences[occurrenceId].effect);
+    console.log("TRIGGERED", opportunityId);
+    affect(state, state.opportunities[opportunityId].effect);
   }
 };
 
@@ -528,29 +522,59 @@ const SceneRenderer = (props: { scenePath?: [string, string?] }) => {
   );
 };
 
-const Animation = (props: {
-  animation: () => Promise<void>;
-  onComplete: () => void;
-}) => {
-  const { animation, onComplete } = props;
+type Overlay = FC<{ id: string; destroy: () => void; params: any }>;
 
+const TravelOverlay: Overlay = ({ destroy, params }) => {
+  const [pushGameState] = useGameSelector((x) => [x.pushGameState] as const);
   useEffect(() => {
     (async () => {
-      animation();
-      onComplete();
+      pushGameState(
+        (x, {}) => {
+          x.location = ["travel"];
+        },
+        { replace: true }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      pushGameState((x, {}) => {
+        x.time[1] = x.time[1] + 1;
+        x.location = params.to;
+      });
+      destroy();
     })();
   }, []);
+  return null;
+};
 
+const SleepOverlay: Overlay = ({ destroy }) => {
+  const [pushGameState] = useGameSelector((x) => [x.pushGameState] as const);
+  useEffect(() => {
+    (async () => {
+      pushGameState(
+        (x, {}) => {
+          x.time[0] += 1;
+          x.time[1] = 0;
+          x.location = ["dream"];
+        },
+        { replace: true }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      pushGameState((x, {}) => {
+        x.location = ["home", "bedroom"];
+      });
+      destroy();
+    })();
+  }, []);
   return null;
 };
 
 const Game = () => {
   const [state, updateState] = useImmer<GameState>({
+    seed: shortid(),
     time: [0, 0],
     location: story.startingLocation,
     scene: undefined,
     tags: {},
-    occurrences: {
+    opportunities: {
       welcome: {
         trigger: {
           type: "and",
@@ -571,36 +595,37 @@ const Game = () => {
       },
     },
   });
-  const [history, updateHistory] = useImmer<GameState[]>([]);
+  const [history, updateHistory] = useImmer<GameState[]>([merge({}, state)]);
 
-  const pushGameState = useCallback(
-    (
-      next: (state: Draft<GameState>, helpers: PushGameStateHelpers) => void
-    ) => {
+  const [overlays, setOverlays] = useState<{
+    [id: string]: { Overlay: Overlay; params?: any };
+  }>({});
+  const overlay = useCallback<GameContextType["overlay"]>(
+    (overlay: Overlay, params?: any) =>
+      setOverlays((x) => ({
+        ...x,
+        ...{ [shortid()]: { Overlay: overlay, params } },
+      })),
+    [setOverlays]
+  );
+  const removeOverlay = useCallback(
+    (id: string) =>
+      setOverlays((x) => {
+        delete x[id];
+        return x;
+      }),
+    [setOverlays]
+  );
+
+  const pushGameState = useCallback<GameContextType["pushGameState"]>(
+    (next, options) => {
       updateState((x) => {
-        //save state to history before modification
-        updateHistory((y) => [merge({}, x), ...y.slice(0, 9)]);
-
         //call downstream state changes
         next(x, {
           occur,
           matchesTrigger,
-          performResult,
+          affect: affect,
         });
-
-        //automatically sleep
-        if (x.time[1] >= story.times.length) {
-          x.time[0] += 1;
-          x.time[1] = 0;
-          x.location = ["dream"];
-          animate(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-            pushGameState((x, {}) => {
-              x.time[1] = x.time[1] + 1;
-              x.location = ["home", "bedroom"];
-            });
-          });
-        }
 
         //make sure unassigned scenes don't break the game
         const scene = x.scene?.[0]
@@ -613,16 +638,27 @@ const Game = () => {
           console.error("SCENE MISSING", x.scene.join("-"));
           x.scene = undefined;
         }
+
+        if (x.time[1] >= story.times.length) {
+          overlay(SleepOverlay);
+          return;
+        }
+
+        if (!options?.replace) {
+          //assign new random seed
+          x.seed = shortid();
+          //save new state to history
+          updateHistory((y) => [merge({}, x), ...y.slice(0, 24)]);
+        }
       });
     },
-    [updateState]
+    [overlays, updateState, overlay]
   );
-
-  const [animation, setAnimation] = useState<() => Promise<void>>();
-  const animate = useCallback(
-    (animation: () => Promise<void>) => setAnimation(animation),
-    [setAnimation]
-  );
+  const popGameState = useCallback(() => {
+    if (history.length <= 1) return;
+    updateState((x) => history[1]);
+    updateHistory((y) => y.slice(1));
+  }, [updateState, updateHistory, history]);
 
   useEffect(() => {
     console.log("STATE CHANGE", state);
@@ -634,23 +670,24 @@ const Game = () => {
         story,
         state,
         pushGameState,
-        animate,
+        overlay,
       }}
     >
       <Setting location={state.location} />
       <Navigation location={state.location} hidden={!!state.scene} />
       <SceneRenderer scenePath={state.scene} />
-      <Box sx={{ position: "absolute", left: 0, top: 0, right: 0, p: 4 }}>
-        {`Day ${state.time[0] + 1} - ${story.times[state.time[1]]}`}
-      </Box>
-      {animation && (
-        <Animation
-          animation={animation}
-          onComplete={() => {
-            setAnimation(undefined);
-          }}
-        />
-      )}
+      <Stack
+        direction={"row"}
+        spacing={2}
+        alignItems={"center"}
+        sx={{ position: "absolute", left: 0, top: 0, right: 0, p: 2 }}
+      >
+        <IconButton onClick={() => popGameState()}>{"←"}</IconButton>
+        <Box>{`Day ${state.time[0] + 1} - ${story.times[state.time[1]]}`}</Box>
+      </Stack>
+      {map(overlays, ({ Overlay, params }, id) => (
+        <Overlay key={id} destroy={() => removeOverlay(id)} params={params} />
+      ))}
     </GameContext.Provider>
   );
 };

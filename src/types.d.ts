@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 declare type Game = {
   state: Game.GameState;
   history: Game.GameState[];

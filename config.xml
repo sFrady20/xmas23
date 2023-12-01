@@ -13,4 +13,5 @@
     <content src="index.html" />
 
     <icon src="public/app-icon.png" />
+    <splash src="public/setting-dream.png" />
 </widget>
